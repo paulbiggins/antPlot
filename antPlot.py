@@ -1,3 +1,4 @@
+import os
 import sys
 import csv
 import math
@@ -5,6 +6,8 @@ import mmap
 import matplotlib.pyplot as plt
 
 csv.register_dialect('semicolon', delimiter=';')
+
+
 
 def mathify(x,y):
     #do math and return data in different formats
@@ -18,6 +21,22 @@ def mathify(x,y):
     mismatch = -10*math.log10(1-(10^(logmag/20))^2)
 
     return (logmag, swr, mismatch)
+
+
+
+def save(name, ext):
+    #generate a save file path
+
+    tempPath = os.path.dirname(os.path.realpath(sys.argv[len(sys.argv)])+'/'+name
+    directory = os.path.split(tempPath)[0]
+    filename = '%s.%s' (os.path.split(tempPath)[1], ext)
+    if directory == '':
+        directory = '.'
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    savepath = os.path.join(directory, filename)
+
+    return savepath
 
 
 
@@ -59,17 +78,19 @@ def dataParse(f):
             reader = csv.reader(f)
             for row in reader:
                 if 'Frequency' in row and row[2].isdigit():
-                    freq = [float(i) for i in row and i isdigit()]
+                    freq = [float(i) for i in row and i.isdigit()]
                 if 'Efficiency' in row:
-                    efficiency = [float(i) for i in row and i isdigit()]
+                    efficiency = [float(i) for i in row and i.isdigit()]
             #split efficiency blocks
             spacing = freq(1) - freq(0)
-            effblock = 0
             effmap = zip(freq, efficiency)
+            effblock = []
             for i in effmap:
-                parsedData[effblock].append(effmap[i])
-                if effmap[i+1][0]-effmap[i][0] > spacing:
-                    effblock += 1
+                if effmap[i+1][0]-effmap[i][0] == spacing:
+                    effblock.append(i)
+                else:
+                    parsedData.append(effblock)
+                    effblock = [i]
 
     finally:
         f.close()
@@ -78,7 +99,80 @@ def dataParse(f):
 
 
 
+def writeData(name, data)
+    #writing the data to an organized CSV
+
+    sortedData = []
+    #first format the data
+    for sublist in data:
+        currentList = []
+        currentList.append(sublist[1])
+        for subsublist in sublist[0]:
+            if type(subsublist) == list:
+                for subsubsublist in subsublist:
+                    currentList.append(subsubsublist)
+            else:
+                currentList.append(subsublist)
+        sortedData.append(currentList)
+
+    #now sort it
+    sortedData.sort(key = len, reverse = True)
+
+    #generate the header
+    header = []
+    for i in sortedData:
+        if i[0] == 'loss':
+            header.append('Frequency (MHz)')
+            header.append('Return Loss (dB)')
+            header.append('VSWR (V)')
+            header.append('Mismatch Loss (dB)')
+        if i[0] == 'eff':
+            header.append('Frequency (MHz)')
+            header.append('Efficiency (dB)')
+
+    savepath = save(name, 'csv')
+    f = open(savepath, 'wt')
+    try:
+        writer = csv.writer(f)
+        writer.writerow(header)
+
+        stringList = []
+        for sublist in sortedData:
+            ndx = 0
+            for tup in sublist:
+                if tup.isdigit():
+                    str = ','.join(list(tup))
+                    if (len(stringList)-1 < ndx)
+                        stringList.append(str)
+                    else:
+                        stringList[ndx] += str
+                    ndx += 1
+            writer.writerow(stringList)
+    finally:
+        f.close()
+
+    return
+
+def plotData(name, bandmap, data)
+    #determine number of plots needed from eff blocks
+    #plot eff first
+    #plot loss 100MHz from eff data edges
+    #plot band edges if they are in the plotted loss data range
+    #save plot to file
+    return
+
+
+
 #stuffs
-for i in range(1, len(sys.argv)):
-    f = open(sys.argv[i], 'rt')
-    data[i-1] = dataParse(f)
+name = sys.argv[1]
+bandmap = []
+data = []
+for i in range(2, len(sys.argv)):
+    if sys.argv[i].isdigit():
+        bandmap.append(sys.argv[i])
+    else:
+        f = open(sys.argv[i], 'rt')
+        data.append(dataParse(f))
+
+writeData(name, data)
+plotData(name, bandmap, data)
