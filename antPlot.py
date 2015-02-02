@@ -6,11 +6,13 @@ import mmap
 import matplotlib.pyplot as plt
 
 csv.register_dialect('semicolon', delimiter=';')
+plt.style.use('fivethirtyeight')
+plt.rcParams['font.family'] = 'AkkuratPro'
 
 
 
 def mathify(x,y):
-    #do math and return data in different formats
+#do math and return data in different formats
 
     if y != False: #special case for R&S formatted data
         logmag = 20*math.log10(math.hypot(x,y))
@@ -18,14 +20,14 @@ def mathify(x,y):
         logmag = x
 
     swr = (1+pow(10,(logmag/20)))/(1-pow(10,(logmag/20)))
-    mismatch = -10*math.log10(1-pow(pow(10,(logmag/20)),2))
+    mismatch = 10*math.log10(1-pow(pow(10,(logmag/20)),2))
 
     return (logmag, swr, mismatch)
 
 
 
 def save(name, ext):
-    #generate a save file path
+#generate a save file path
 
     tempPath = os.path.dirname(os.path.realpath(sys.argv[len(sys.argv)-1]))+'/'+name
     directory = os.path.split(tempPath)[0]
@@ -41,7 +43,7 @@ def save(name, ext):
 
 
 def dataParse(f):
-    #parsing out the input files into useable data formats
+#parsing out the input files into useable data formats
 
     parsedData = []
     try:
@@ -108,7 +110,7 @@ def dataParse(f):
 
 
 def writeData(name, data):
-    #writing the data to an organized CSV
+#writing the data to an organized CSV
 
     sortedData = []
     #first format the data
@@ -138,8 +140,7 @@ def writeData(name, data):
             header.append('Frequency (MHz)')
             header.append('Efficiency (dB)')
 
-    savepath = save(name, 'csv')
-    f = open(savepath, 'wt')
+    f = open(save(name, 'csv'), 'wt')
     try:
         writer = csv.writer(f)
         writer.writerow(header)
@@ -162,12 +163,73 @@ def writeData(name, data):
 
     return
 
-#def plotData(name, bandmap, data):
-    #determine number of plots needed from eff blocks
-    #plot eff first
-    #plot loss 100MHz from eff data edges
-    #plot band edges if they are in the plotted loss data range
+def plotData(name, bandmap, data):
+#use matplotlib to spit out data
+
+    bandmap.sort()
+
+    if len(bandmap) > 1:
+    #the case where we have bandedges to plot
+        numSubplots = len(bandmap)/2
+
+        fig1, axs = plt.subplots(1, numSubplots, sharey = True, figsize = (12,9), dpi = 80, facecolor = 'w', edgecolor = 'k')
+        fig1.suptitle(name + ' Return Loss and Efficiency', fontsize = 20)
+        axs[0].set_ylabel('Return Loss/Efficiency (dB)')
+        fig1.text(0.5, 0.03, 'Frequency (MHz)', horizontalalignment = 'center', verticalalignment = 'top',  fontsize = 16)
+
+
+        for plots in data:
+            if plots[1] == 'loss':
+                x = [point[0] for point in plots[0]] #point[0] is frequency values
+                y = [point[1] for point in plots[0]] #point[1] is return loss values
+                for i in range(0, numSubplots):
+                    axs[i].plot(x, y)
+            if plots[1] == 'eff':
+                for blocks in plots[0]:
+                    x = [point[0] for point in blocks]
+                    y = [point[1] for point in blocks]
+                    for i in range(0, numSubplots):
+                        axs[i].plot(x,y)
+
+        #plot the bandedges and set the subplot limits
+        ndx = 0
+        for i in range(0, numSubplots):
+            axs[i].axvline(bandmap[ndx], color = '#808080', linewidth = 2, linestyle = ':')
+            axs[i].axvline(bandmap[ndx+1], color = '#808080', linewidth = 2, linestyle = ':')
+            axs[i].set_xlim(bandmap[ndx]-100, bandmap[ndx+1]+100)
+            x1, x2, y1, y2 = axs[i].axis()
+            axs[i].axis([x1, x2, -18, 0])
+            axs[i].grid(True)
+            ndx += 2
+
+
+    else:
+    #the case where bandedges are undefined, just plot everything
+        fig1 = plt.figure(num = None, figsize = (12,9), dpi = 80, facecolor = 'w', edgecolor = 'k')
+        plt.title(name + ' Return Loss and Efficiency', fontsize = 20)
+        plt.xlabel('Frequency (dB)')
+        plt.ylabel('Return Loss/Efficiency (dB)')
+
+
+        for plots in data:
+            if plots[1] == 'loss':
+                x = [point[0] for point in plots[0]] #point[0] is frequency values
+                y = [point[1] for point in plots[0]] #point[1] is return loss values
+                plt.plot(x, y)
+            if plots[1] == 'eff':
+                for blocks in plots[0]:
+                    x = [point[0] for point in blocks]
+                    y = [point[1] for point in blocks]
+                    plt.plot(x,y)
+
+        x1, x2, y1, y2 = plt.axis()
+        plt.axis([x1, x2, -18, 0])
+        plt.grid(True)
+
+
     #save plot to file
+    plt.savefig(save(name, 'png'))
+    plt.show()
     return
 
 
@@ -183,6 +245,6 @@ for i in range(2, len(sys.argv)):
         f = open(sys.argv[i], 'rt')
         data.append(dataParse(f))
 
-#tempPath = os.path.dirname(os.path.realpath(sys.argv[len(sys.argv)-1]))+'/'+name
+bandmap = map(int, bandmap)
 writeData(name, data)
-#plotData(name, bandmap, data)
+plotData(name, bandmap, data)
