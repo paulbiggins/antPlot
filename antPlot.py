@@ -167,6 +167,7 @@ def plotData(name, bandmap, data):
 #use matplotlib to spit out data
 
     bandmap.sort()
+    ncolors = len(plt.rcParams['axes.color_cycle'])
 
     if len(bandmap) > 1:
     #the case where we have bandedges to plot
@@ -178,18 +179,21 @@ def plotData(name, bandmap, data):
         fig1.text(0.5, 0.03, 'Frequency (MHz)', horizontalalignment = 'center', verticalalignment = 'top',  fontsize = 16)
 
 
+        ndx = 0
         for plots in data:
             if plots[1] == 'loss':
                 x = [point[0] for point in plots[0]] #point[0] is frequency values
                 y = [point[1] for point in plots[0]] #point[1] is return loss values
                 for i in range(0, numSubplots):
-                    axs[i].plot(x, y)
+                    axs[i].plot(x, y, color = plt.rcParams['axes.color_cycle'][ndx])
+                ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
             if plots[1] == 'eff':
                 for blocks in plots[0]:
                     x = [point[0] for point in blocks]
                     y = [point[1] for point in blocks]
                     for i in range(0, numSubplots):
-                        axs[i].plot(x,y)
+                        axs[i].plot(x,y, color = plt.rcParams['axes.color_cycle'][ndx])
+                ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
 
         #plot the bandedges and set the subplot limits
         ndx = 0
@@ -211,22 +215,26 @@ def plotData(name, bandmap, data):
         plt.ylabel('Return Loss/Efficiency (dB)')
 
 
+        ndx = 0
         for plots in data:
             if plots[1] == 'loss':
                 x = [point[0] for point in plots[0]] #point[0] is frequency values
                 y = [point[1] for point in plots[0]] #point[1] is return loss values
-                plt.plot(x, y)
+                plt.plot(x, y, color = plt.rcParams['axes.color_cycle'][ndx])
+                ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
             if plots[1] == 'eff':
                 for blocks in plots[0]:
                     x = [point[0] for point in blocks]
                     y = [point[1] for point in blocks]
                     plt.plot(x,y)
+                ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
 
         x1, x2, y1, y2 = plt.axis()
         plt.axis([x1, x2, -18, 0])
         plt.grid(True)
 
 
+    #print plt.rcParams['axes.color_cycle']
     #save plot to file
     plt.savefig(save(name, 'png'))
     plt.show()
