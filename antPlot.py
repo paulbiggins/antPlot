@@ -170,7 +170,7 @@ def plotData(name, bandmap, data):
     bandmap.sort()
     ncolors = len(colorMap)
 
-    if len(bandmap) > 1:
+    if len(bandmap) > 2:
     #the case where we have bandedges to plot
         numSubplots = len(bandmap)/2
 
@@ -211,7 +211,7 @@ def plotData(name, bandmap, data):
 
 
     else:
-    #the case where bandedges are undefined, just plot everything
+    #the case where there are 2 bandedges or they are undefined, just plot everything
         fig1 = plt.figure(num = None, figsize = (12,9), dpi = 80, facecolor = 'w', edgecolor = 'k')
         plt.title(name, fontsize = 20)
         #plt.title(name + ' Return Loss and Efficiency', fontsize = 20)
@@ -233,6 +233,8 @@ def plotData(name, bandmap, data):
                     plt.plot(x, y, color = colorMap[ndx])
                 ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
 
+        plt.axvline(bandmap[0], color = '#000000', linewidth = 2, linestyle = ':')
+        plt.axvline(bandmap[1], color = '#000000', linewidth = 2, linestyle = ':')
         x1, x2, y1, y2 = plt.axis()
         plt.axis([x1, x2, -18, 0])
         plt.grid(True)
