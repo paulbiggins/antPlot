@@ -4,6 +4,7 @@ import csv
 import math
 import mmap
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 csv.register_dialect('semicolon', delimiter=';')
 plt.style.use('fivethirtyeight')
@@ -164,80 +165,115 @@ def writeData(name, data):
 
     return
 
-def plotData(name, bandmap, data):
+def plotData(name, bandmap, data, sbs):
 #use matplotlib to spit out data
 
     bandmap.sort()
     ncolors = len(colorMap)
+    badData = ['', 'eff', 'loss']
+    dataFlag = sbs
+    gs0 = gridspec.GridSpec(1, sbs+1)
 
     if len(bandmap) > 2:
     #the case where we have bandedges to plot
         numSubplots = len(bandmap)/2
+        gs00 = gridspec.GridSpecFromSubplotSpec(1, numSubplots, gs0[0, 0])
 
-        fig1, axs = plt.subplots(1, numSubplots, sharey = True, figsize = (12,9), dpi = 80, facecolor = 'w', edgecolor = 'k')
+        fig1 = plt.figure(num = None, figsize = (12 * (sbs+1),9), dpi = 80, facecolor = 'w', edgecolor = 'k')
         fig1.suptitle(name, fontsize = 20)
-        #fig1.suptitle(name + ' Return Loss and Efficiency', fontsize = 20)
         #fig1.suptitle(name + ' Isolation', fontsize = 20)
-        axs[0].set_ylabel('Return Loss/Efficiency (dB)')
         fig1.text(0.5, 0.03, 'Frequency (MHz)', horizontalalignment = 'center', verticalalignment = 'top',  fontsize = 16)
 
 
-        ndx = 0
-        for plots in data:
-            if plots[1] == 'loss':
-                x = [point[0] for point in plots[0]] #point[0] is frequency values
-                y = [point[1] for point in plots[0]] #point[1] is return loss values
-                for i in range(0, numSubplots):
-                    axs[i].plot(x, y, color = colorMap[ndx])
-                ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
-            if plots[1] == 'eff':
-                for blocks in plots[0]:
-                    x = [point[0] for point in blocks]
-                    y = [point[1] for point in blocks]
+        for figs in range(0, sbs+1):
+            ndx = 0
+            axs = [None] * numSubplots
+            for plots in data:
+                if plots[1] == 'loss' and plots[1] != badData[dataFlag]:
+                    x = [point[0] for point in plots[0]] #point[0] is frequency values
+                    y = [point[1] for point in plots[0]] #point[1] is return loss values
                     for i in range(0, numSubplots):
-                        axs[i].plot(x,y, color = colorMap[ndx])
-                ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
+                        if i > 0:
+                            axs[i] = plt.subplot(gs00[0, i], sharey = axs[0])
+                            plt.setp(axs[i].get_yticklabels(), visible=False)
+                        else:
+                            axs[i] = plt.subplot(gs00[0, i])
+                            if sbs > 0:
+                                axs[i].set_ylabel('Return Loss (dB)')
+                        axs[i].plot(x, y, color = colorMap[ndx])
+                    ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
+                if plots[1] == 'eff' and plots [1] != badData[dataFlag]:
+                    for blocks in plots[0]:
+                        x = [point[0] for point in blocks]
+                        y = [point[1] for point in blocks]
+                        for i in range(0, numSubplots):
+                            if i > 0:
+                                axs[i] = plt.subplot(gs00[0, i], sharey = axs[0])
+                                plt.setp(axs[i].get_yticklabels(), visible=False)
+                            else:
+                                axs[i] = plt.subplot(gs00[0, i])
+                                if sbs > 0:
+                                    axs[i].set_ylabel('Efficiency (dB)')
+                            axs[i].plot(x,y, color = colorMap[ndx])
+                    ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
 
-        #plot the bandedges and set the subplot limits
-        ndx = 0
-        for i in range(0, numSubplots):
-            axs[i].axvline(bandmap[ndx], color = '#000000', linewidth = 2, linestyle = ':')
-            axs[i].axvline(bandmap[ndx+1], color = '#000000', linewidth = 2, linestyle = ':')
-            axs[i].set_xlim(bandmap[ndx]-100, bandmap[ndx+1]+100)
-            x1, x2, y1, y2 = axs[i].axis()
-            axs[i].axis([x1, x2, -18, 0])
-            axs[i].grid(True)
-            ndx += 2
+            #plot the bandedges and set the subplot limits
+            ndx = 0
+            for i in range(0, numSubplots):
+                axs[i].axvline(bandmap[ndx], color = '#000000', linewidth = 2, linestyle = ':')
+                axs[i].axvline(bandmap[ndx+1], color = '#000000', linewidth = 2, linestyle = ':')
+                axs[i].set_xlim(bandmap[ndx]-100, bandmap[ndx+1]+100)
+                x1, x2, y1, y2 = axs[i].axis()
+                axs[i].axis([x1, x2, -18, 0])
+                axs[i].grid(True)
+                ndx += 2
+
+            if sbs > 0:
+                gs00 = gridspec.GridSpecFromSubplotSpec(1, numSubplots, gs0[0, 1])
+                dataFlag += 1
+            else:
+                axs[0].set_ylabel('Return Loss/Efficiency (dB)')
 
 
     else:
     #the case where there are 2 bandedges or they are undefined, just plot everything
-        fig1 = plt.figure(num = None, figsize = (12,9), dpi = 80, facecolor = 'w', edgecolor = 'k')
-        plt.title(name, fontsize = 20)
-        #plt.title(name + ' Return Loss and Efficiency', fontsize = 20)
-        plt.xlabel('Frequency (dB)')
-        plt.ylabel('Return Loss/Efficiency (dB)')
+        fig1 = plt.figure(num = None, figsize = (12 * (sbs+1),9), dpi = 80, facecolor = 'w', edgecolor = 'k')
+        plt.suptitle(name, fontsize = 20)
+        #plt.suptitle(name + ' Return Loss and Efficiency', fontsize = 20)
+        fig1.text(0.5, 0.03, 'Frequency (MHz)', horizontalalignment = 'center', verticalalignment = 'top',  fontsize = 16)
 
 
-        ndx = 0
-        for plots in data:
-            if plots[1] == 'loss':
-                x = [point[0] for point in plots[0]] #point[0] is frequency values
-                y = [point[1] for point in plots[0]] #point[1] is return loss values
-                plt.plot(x, y, color = colorMap[ndx])
-                ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
-            if plots[1] == 'eff':
-                for blocks in plots[0]:
-                    x = [point[0] for point in blocks]
-                    y = [point[1] for point in blocks]
-                    plt.plot(x, y, color = colorMap[ndx])
-                ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
+        for figs in range(0, sbs+1):
+            ndx = 0
+            axs = [None] * (sbs+1)
+            for plots in data:
+                if plots[1] == 'loss' and plots[1] != badData[dataFlag]:
+                    x = [point[0] for point in plots[0]] #point[0] is frequency values
+                    y = [point[1] for point in plots[0]] #point[1] is return loss values
+                    ax = plt.subplot(gs0[0, 0])
+                    ax.plot(x, y, color = colorMap[ndx])
+                    ax.set_ylabel('Return Loss (dB)')
+                    ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
+                if plots[1] == 'eff' and plots[1] != badData[dataFlag]:
+                    for blocks in plots[0]:
+                        x = [point[0] for point in blocks]
+                        y = [point[1] for point in blocks]
+                        ax = plt.subplot(gs0[0,sbs])
+                        ax.plot(x, y, color = colorMap[ndx])
+                        ax.set_ylabel('Efficiency (dB)')
+                    ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
 
-        plt.axvline(bandmap[0], color = '#000000', linewidth = 2, linestyle = ':')
-        plt.axvline(bandmap[1], color = '#000000', linewidth = 2, linestyle = ':')
-        x1, x2, y1, y2 = plt.axis()
-        plt.axis([x1, x2, -18, 0])
-        plt.grid(True)
+            if len(bandmap) > 1: #just in case there's 2 bandedges to plot
+                plt.axvline(bandmap[0], color = '#000000', linewidth = 2, linestyle = ':')
+                plt.axvline(bandmap[1], color = '#000000', linewidth = 2, linestyle = ':')
+            x1, x2, y1, y2 = plt.axis()
+            plt.axis([x1, x2, -18, 0])
+            plt.grid(True)
+
+            if sbs > 0:
+                dataFlag += 1
+            else:
+                ax.set_ylabel('Return Loss/Efficiency (dB)')
 
 
     #save plot to file
@@ -251,9 +287,13 @@ def plotData(name, bandmap, data):
 name = sys.argv[1]
 bandmap = []
 data = []
+sbs = 0
+
 for i in range(2, len(sys.argv)):
     if sys.argv[i].isdigit():
         bandmap.append(sys.argv[i])
+    elif sys.argv[i] == '-sbs':
+        sbs = 1
     else:
         #if i > 2 and i % 2 != 1:
         #    raise Exception("ENTERED AN ODD NUMBER OF BAND EDGES!!!")
@@ -262,4 +302,4 @@ for i in range(2, len(sys.argv)):
 
 bandmap = map(int, bandmap)
 writeData(name, data)
-plotData(name, bandmap, data)
+plotData(name, bandmap, data, sbs)
