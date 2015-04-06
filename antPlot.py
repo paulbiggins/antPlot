@@ -3,8 +3,11 @@ import sys
 import csv
 import math
 import mmap
+import datetime
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import matplotlib.gridspec as gridspec
+from PIL import Image
 
 csv.register_dialect('semicolon', delimiter=';')
 plt.style.use('fivethirtyeight')
@@ -25,6 +28,21 @@ def mathify(x,y):
     mismatch = 10*math.log10(1-pow(pow(10,(logmag/20)),2))
 
     return (logmag, swr, mismatch)
+
+
+
+def statify(x):
+#do stats yo
+    spacemap = []
+    for i in range(0, len(x)-1):
+        spacing = x[i+1] - x[i]
+        spacemap.append(spacing)
+    spacing = sum(spacemap)/len(spacemap)
+    average = lambda y: sum(y) * 1.0 / len(y)
+    variance = lambda y: map(lambda z: (z - average(y)) ** 2, y)
+    stdev = math.sqrt(average(variance(spacemap)))
+
+    return spacing, stdev
 
 
 
@@ -87,16 +105,25 @@ def dataParse(f):
                     row.remove('Point Values')
                     row.remove('Frequency (MHz)')
                     freq = [float(i) for i in row]
+                #special case for data from ETS
+                if any('Frequency' in s for s in row) and any('Total' in s for s in row):
+                    row.remove('')
+                    row.remove('Total')
+                    row.remove('Frequency  (MHz)') #yeah, that's 2 spaces...
+                    freq = [float(i) for i in row]
+                    efficiency = 1
                 if any('Efficiency (dB)' in s for s in row):
                     row.remove('')
                     row.remove('Efficiency (dB)')
+                    if efficiency == 1:
+                        row.remove('')
                     efficiency = [float(i) for i in row]
             #split efficiency blocks
-            spacing = freq[1] - freq[0]
+            spacing, stdev = statify(freq)
             effmap = zip(freq, efficiency)
             effblock = []
             for i in range(0, len(effmap)-2):
-                if effmap[i+1][0]-effmap[i][0] == spacing:
+                if effmap[i+1][0]-effmap[i][0] <= spacing+stdev:
                     effblock.append(effmap[i])
                 else:
                     parsedData.append(effblock)
@@ -172,18 +199,23 @@ def plotData(name, bandmap, data, sbs):
     ncolors = len(colorMap)
     badData = ['', 'eff', 'loss']
     dataFlag = sbs
-    gs0 = gridspec.GridSpec(1, sbs+1)
+
+    fig1 = plt.figure(num = None, figsize = (12 * (sbs+1),9), dpi = 80, facecolor = 'w', edgecolor = 'k')
+    fig1.suptitle(name, fontsize = 20)
+    #fig1.suptitle(name + ' Isolation', fontsize = 20)
+    if sbs > 0:
+        fig1.text(0.28, 0.92, 'Return Loss', horizontalalignment = 'center', fontsize = 18)
+        fig1.text(0.75, 0.92, 'Efficiency', horizontalalignment = 'center', fontsize = 18)
+        fig1.text(0.28, 0.11, 'Frequency (MHz)', horizontalalignment = 'center', verticalalignment = 'top',  fontsize = 16)
+        fig1.text(0.75, 0.11, 'Frequency (MHz)', horizontalalignment = 'center', verticalalignment = 'top',  fontsize = 16)
+    else:
+        fig1.text(0.5, 0.11, 'Frequency (MHz)', horizontalalignment = 'center', verticalalignment = 'top',  fontsize = 16)
+    gs0 = gridspec.GridSpec(1, sbs+1, bottom = 0.15)
 
     if len(bandmap) > 2:
-    #the case where we have bandedges to plot
+    #CASE1: the case where we have bandedges to plot
         numSubplots = len(bandmap)/2
         gs00 = gridspec.GridSpecFromSubplotSpec(1, numSubplots, gs0[0, 0])
-
-        fig1 = plt.figure(num = None, figsize = (12 * (sbs+1),9), dpi = 80, facecolor = 'w', edgecolor = 'k')
-        fig1.suptitle(name, fontsize = 20)
-        #fig1.suptitle(name + ' Isolation', fontsize = 20)
-        fig1.text(0.5, 0.03, 'Frequency (MHz)', horizontalalignment = 'center', verticalalignment = 'top',  fontsize = 16)
-
 
         for figs in range(0, sbs+1):
             ndx = 0
@@ -236,16 +268,10 @@ def plotData(name, bandmap, data, sbs):
 
 
     else:
-    #the case where there are 2 bandedges or they are undefined, just plot everything
-        fig1 = plt.figure(num = None, figsize = (12 * (sbs+1),9), dpi = 80, facecolor = 'w', edgecolor = 'k')
-        plt.suptitle(name, fontsize = 20)
-        #plt.suptitle(name + ' Return Loss and Efficiency', fontsize = 20)
-        fig1.text(0.5, 0.03, 'Frequency (MHz)', horizontalalignment = 'center', verticalalignment = 'top',  fontsize = 16)
-
+    #CASE2: the case where there are 2 bandedges or they are undefined, just plot everything
 
         for figs in range(0, sbs+1):
             ndx = 0
-            axs = [None] * (sbs+1)
             for plots in data:
                 if plots[1] == 'loss' and plots[1] != badData[dataFlag]:
                     x = [point[0] for point in plots[0]] #point[0] is frequency values
@@ -266,6 +292,7 @@ def plotData(name, bandmap, data, sbs):
             if len(bandmap) > 1: #just in case there's 2 bandedges to plot
                 plt.axvline(bandmap[0], color = '#000000', linewidth = 2, linestyle = ':')
                 plt.axvline(bandmap[1], color = '#000000', linewidth = 2, linestyle = ':')
+                ax.set_xlim(bandmap[0]-100, bandmap[1]+100)
             x1, x2, y1, y2 = plt.axis()
             plt.axis([x1, x2, -18, 0])
             plt.grid(True)
@@ -275,6 +302,19 @@ def plotData(name, bandmap, data, sbs):
             else:
                 ax.set_ylabel('Return Loss/Efficiency (dB)')
 
+
+    #grey bottom bar
+    bottomBar = patches.Rectangle((0,0), 1, 0.04, color = '#666666', transform = fig1.transFigure) #, zorder = 2)
+    fig1.patches.append(bottomBar)
+    today = str(datetime.datetime.now().date())
+    fig1.text(0.99, 0.015, 'Nest Labs Condfidential, ' + today, horizontalalignment = 'right', fontsize = 12, color = '#cccccc')
+    logo = Image.open('logo.png')
+    logoHeight = int(round(fig1.get_figheight() * fig1.dpi * 0.038))
+    logoWidth = int(round(logo.size[0] * logoHeight / logo.size[1]))
+    logoOffsetW = fig1.get_figwidth() * fig1.dpi * 0.007
+    logoOffsetH = fig1.get_figheight() * fig1.dpi * 0.004
+    logo = logo.resize((logoWidth, logoHeight))
+    fig1.figimage(logo, logoOffsetW, logoOffsetH, zorder = 1)
 
     #save plot to file
     plt.savefig(save(name, 'png'))
@@ -298,6 +338,7 @@ for i in range(2, len(sys.argv)):
         #if i > 2 and i % 2 != 1:
         #    raise Exception("ENTERED AN ODD NUMBER OF BAND EDGES!!!")
         f = open(sys.argv[i], 'rt')
+        print f
         data.append(dataParse(f))
 
 bandmap = map(int, bandmap)
