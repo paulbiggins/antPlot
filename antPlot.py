@@ -4,14 +4,14 @@ import csv
 import math
 import mmap
 import datetime
+import smithplot
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.gridspec as gridspec
 from PIL import Image
+from numpy import array
 
 csv.register_dialect('semicolon', delimiter=';')
-plt.style.use('fivethirtyeight')
-plt.rcParams['font.family'] = 'AkkuratPro'
 colorMap = ['#0066cc', '#ff0000', '#f2b111', '#78aa42', '#833083', '#ff6600', '#7c757f']
              #blue      #red       #yellow    #green     #purple    #orange    #grey
 
@@ -21,13 +21,17 @@ def mathify(x,y):
 
     if y != False: #special case for R&S formatted data
         logmag = 20*math.log10(math.hypot(x,y))
+        reNormZ = (1-x**2-y**2)/((1-x)**2+y**2)
+        imNormZ = 2*y/((1-x)**2+y**2)
     else:
         logmag = x
+        reNormZ = None
+        imNormZ = None
 
     swr = (1+pow(10,(logmag/20)))/(1-pow(10,(logmag/20)))
     mismatch = 10*math.log10(1-pow(pow(10,(logmag/20)),2))
 
-    return (logmag, swr, mismatch)
+    return (logmag, swr, mismatch, reNormZ, imNormZ)
 
 
 
@@ -66,20 +70,22 @@ def dataParse(f):
 #parsing out the input files into useable data formats
 
     parsedData = []
+    numbertype = None
     try:
         search = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
 
         #the R&S case, return loss
         if search.find('freq') != -1:
             datatype = 'loss'
+            numbertype = 'complex'
             reader = csv.reader(f, dialect = 'semicolon')
             for row in reader:
                 if not any('freq' in s for s in row) and not any('#' in s for s in row):
                     freq = float(row[0])/1000000
                     re = float(row[1])
                     im = float(row[2])
-                    (logmag, swr, mismatch) = mathify(re, im)
-                    rawdata = (freq, logmag, swr, mismatch)
+                    (logmag, swr, mismatch, reNormZ, imNormZ) = mathify(re, im)
+                    rawdata = (freq, logmag, swr, mismatch, reNormZ, imNormZ)
                     parsedData.append(rawdata)
 
 
@@ -91,7 +97,7 @@ def dataParse(f):
                 if not any('Frequency' in s for s in row) and not any('#' in s for s in row):
                     freq = float(row[0])/1000000
                     logmag = float(row[1])
-                    (logmag, swr, mismatch) = mathify(logmag, False)
+                    (logmag, swr, mismatch, reNormZ, imNormZ) = mathify(logmag, False)
                     rawdata = (freq, logmag, swr, mismatch)
                     parsedData.append(rawdata)
 
@@ -105,8 +111,9 @@ def dataParse(f):
                     row.remove('Point Values')
                     row.remove('Frequency (MHz)')
                     freq = [float(i) for i in row]
+                    efficiency = 0
                 #special case for data from ETS
-                if any('Frequency' in s for s in row) and any('Total' in s for s in row):
+                if any('Frequency  ' in s for s in row) and any('Total' in s for s in row):
                     row.remove('')
                     row.remove('Total')
                     row.remove('Frequency  (MHz)') #yeah, that's 2 spaces...
@@ -134,7 +141,7 @@ def dataParse(f):
     finally:
         f.close()
 
-    return (parsedData, datatype)
+    return (parsedData, datatype, numbertype)
 
 
 
@@ -200,6 +207,8 @@ def plotData(name, bandmap, data, sbs):
     badData = ['', 'eff', 'loss']
     dataFlag = sbs
 
+    plt.style.use('fivethirtyeight')
+    plt.rcParams['font.family'] = 'AkkuratPro'
     fig1 = plt.figure(num = None, figsize = (12 * (sbs+1),9), dpi = 80, facecolor = 'w', edgecolor = 'k')
     fig1.suptitle(name, fontsize = 20)
     #fig1.suptitle(name + ' Isolation', fontsize = 20)
@@ -323,24 +332,66 @@ def plotData(name, bandmap, data, sbs):
 
 
 
+def plotSmith(name, bandmap, data):
+#use matplotlib and smithplot to spit out data
+
+    bandmap.sort()
+    ncolors = len(colorMap)
+
+    fig1 = plt.figure(num = None, figsize = (9, 9), dpi = 80, facecolor = 'w', edgecolor = 'k')
+    fig1.suptitle(name, fontsize = 20)
+    ax = plt.subplot(1, 1, 1, projection = 'smith', plot_hacklines = False)
+    plt.gca().update_scParams(plot_startmarker = None, plot_endmarker = None)
+
+    ndx = 0
+    for plots in data:
+        if plots[1] == 'loss' and plots[2] == 'complex':
+            markers = []
+            complexnums = array([(point[4] + point[5] * 1j) for point in plots[0]])
+            plt.plot(complexnums, marker=None, color = colorMap[ndx])
+            if len(bandmap) > 0:
+                for bandpoint in bandmap:
+                    previous = None
+                    for point in range(0, len(plots[0])):
+                        if plots[0][point][0] <= bandpoint:
+                            previous = plots[0][point][4] + plots[0][point][5] * 1j
+                        else:
+                            break
+                    markers.append(previous)
+                markers = array(markers)
+                plt.plot(markers, marker='o', linewidth = 0, color = colorMap[ndx])
+            ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
+
+    #save plot to file
+    plt.savefig(save(name, 'png'))
+    plt.show()
+    return
+
+
+
 #stuffs
 name = sys.argv[1]
 bandmap = []
 data = []
 sbs = 0
+smith = 0
 
 for i in range(2, len(sys.argv)):
     if sys.argv[i].isdigit():
         bandmap.append(sys.argv[i])
-    elif sys.argv[i] == '-sbs':
+    elif sys.argv[i] == '-sbs' or sys.argv[i] == '--sidebyside':
         sbs = 1
+    elif (sys.argv[i] == '-s' or sys.argv[i] == '--smith') and sbs == 0:
+        smith = 1
     else:
         #if i > 2 and i % 2 != 1:
         #    raise Exception("ENTERED AN ODD NUMBER OF BAND EDGES!!!")
         f = open(sys.argv[i], 'rt')
-        print f
         data.append(dataParse(f))
 
 bandmap = map(int, bandmap)
 writeData(name, data)
-plotData(name, bandmap, data, sbs)
+if smith == 0:
+    plotData(name, bandmap, data, sbs)
+else:
+    plotSmith(name, bandmap, data)
