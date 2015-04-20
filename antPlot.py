@@ -11,7 +11,9 @@ import matplotlib.gridspec as gridspec
 from PIL import Image
 from numpy import array
 
+plt.rcParams['font.family'] = 'AkkuratPro'
 csv.register_dialect('semicolon', delimiter=';')
+csv.register_dialect('touchstone', delimiter='\t')
 colorMap = ['#0066cc', '#ff0000', '#f2b111', '#78aa42', '#833083', '#ff6600', '#7c757f']
              #blue      #red       #yellow    #green     #purple    #orange    #grey
 
@@ -73,6 +75,21 @@ def dataParse(f):
     numbertype = None
     try:
         search = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+
+        #the .sNp case, return loss
+        if search.find('# Hz') != -1:
+            datatype = 'loss'
+            numbertype = 'complex'
+            reader = csv.reader(f, dialect = 'touchstone')
+            for row in reader:
+                if not any('!' in s for s in row) and not any('#' in s for s in row):
+                    freq = float(row[0])/1000000
+                    re = float(row[1])
+                    im = float(row[2])
+                    (logmag, swr, mismatch, reNormZ, imNormZ) = mathify(re, im)
+                    rawdata = (freq, logmag, swr, mismatch, reNormZ, imNormZ)
+                    parsedData.append(rawdata)
+
 
         #the R&S case, return loss
         if search.find('freq') != -1:
@@ -208,7 +225,6 @@ def plotData(name, bandmap, data, sbs):
     dataFlag = sbs
 
     plt.style.use('fivethirtyeight')
-    plt.rcParams['font.family'] = 'AkkuratPro'
     fig1 = plt.figure(num = None, figsize = (12 * (sbs+1),9), dpi = 80, facecolor = 'w', edgecolor = 'k')
     fig1.suptitle(name, fontsize = 20)
     #fig1.suptitle(name + ' Isolation', fontsize = 20)
