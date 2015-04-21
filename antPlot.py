@@ -10,6 +10,7 @@ import matplotlib.patches as patches
 import matplotlib.gridspec as gridspec
 from PIL import Image
 from numpy import array
+from matplotlib.ticker import MultipleLocator
 
 plt.rcParams['font.family'] = 'AkkuratPro'
 csv.register_dialect('semicolon', delimiter=';')
@@ -216,7 +217,7 @@ def writeData(name, data):
 
     return
 
-def plotData(name, bandmap, data, sbs):
+def plotData(name, bandmap, data, sbs, zoomparams):
 #use matplotlib to spit out data
 
     bandmap.sort()
@@ -258,6 +259,9 @@ def plotData(name, bandmap, data, sbs):
                             if sbs > 0:
                                 axs[i].set_ylabel('Return Loss (dB)')
                         axs[i].plot(x, y, color = colorMap[ndx])
+                    #set the y limits
+                    x1, x2, y1, y2 = axs[i].axis()
+                    axs[i].axis([x1, x2, -18, 0])
                     ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
                 if plots[1] == 'eff' and plots [1] != badData[dataFlag]:
                     for blocks in plots[0]:
@@ -272,6 +276,12 @@ def plotData(name, bandmap, data, sbs):
                                 if sbs > 0:
                                     axs[i].set_ylabel('Efficiency (dB)')
                             axs[i].plot(x,y, color = colorMap[ndx])
+                    #set the y limits
+                    x1, x2, y1, y2 = axs[i].axis()
+                    axs[i].axis([x1, x2, -18, 0])
+                    if zoomparams != 0 and sbs != 0:
+                        axs[i].axis([x1, x2, zoomparams[0], zoomparams[1]])
+                        plt.yticks(range(zoomparams[0], zoomparams[1]+1, zoomparams[2]))
                     ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
 
             #plot the bandedges and set the subplot limits
@@ -280,8 +290,6 @@ def plotData(name, bandmap, data, sbs):
                 axs[i].axvline(bandmap[ndx], color = '#000000', linewidth = 2, linestyle = ':')
                 axs[i].axvline(bandmap[ndx+1], color = '#000000', linewidth = 2, linestyle = ':')
                 axs[i].set_xlim(bandmap[ndx]-100, bandmap[ndx+1]+100)
-                x1, x2, y1, y2 = axs[i].axis()
-                axs[i].axis([x1, x2, -18, 0])
                 axs[i].grid(True)
                 ndx += 2
 
@@ -303,6 +311,9 @@ def plotData(name, bandmap, data, sbs):
                     y = [point[1] for point in plots[0]] #point[1] is return loss values
                     ax = plt.subplot(gs0[0, 0])
                     ax.plot(x, y, color = colorMap[ndx])
+                    #set the y limits
+                    x1, x2, y1, y2 = ax.axis()
+                    ax.axis([x1, x2, -18, 0])
                     ax.set_ylabel('Return Loss (dB)')
                     ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
                 if plots[1] == 'eff' and plots[1] != badData[dataFlag]:
@@ -311,15 +322,21 @@ def plotData(name, bandmap, data, sbs):
                         y = [point[1] for point in blocks]
                         ax = plt.subplot(gs0[0,sbs])
                         ax.plot(x, y, color = colorMap[ndx])
+                        #set the y limits
+                        x1, x2, y1, y2 = ax.axis()
+                        ax.axis([x1, x2, -18, 0])
+                        if zoomparams != 0 and sbs != 0:
+                            ax.axis([x1, x2, zoomparams[0], zoomparams[1]])
+                            plt.yticks(range(zoomparams[0], zoomparams[1]+1, zoomparams[2]))
                         ax.set_ylabel('Efficiency (dB)')
+
                     ndx = (ndx + 1) % ncolors #shift to next color, but make sure it's in range
 
             if len(bandmap) > 1: #just in case there's 2 bandedges to plot
                 plt.axvline(bandmap[0], color = '#000000', linewidth = 2, linestyle = ':')
                 plt.axvline(bandmap[1], color = '#000000', linewidth = 2, linestyle = ':')
                 ax.set_xlim(bandmap[0]-100, bandmap[1]+100)
-            x1, x2, y1, y2 = plt.axis()
-            plt.axis([x1, x2, -18, 0])
+
             plt.grid(True)
 
             if sbs > 0:
@@ -391,6 +408,7 @@ bandmap = []
 data = []
 sbs = 0
 smith = 0
+zoomparams = 0
 
 for i in range(2, len(sys.argv)):
     if sys.argv[i].isdigit():
@@ -399,6 +417,11 @@ for i in range(2, len(sys.argv)):
         sbs = 1
     elif (sys.argv[i] == '-s' or sys.argv[i] == '--smith') and sbs == 0:
         smith = 1
+    elif (sys.argv[i] == '-ez' or sys.argv[i] == '--efficiencyzoom'):
+        zoomparams = 1
+    elif zoomparams == 1:
+        zoomparams = sys.argv[i] #[start(bottom), end(top), stepsize(ints only)]
+        zoomparams = map(int, zoomparams.split(','))
     else:
         #if i > 2 and i % 2 != 1:
         #    raise Exception("ENTERED AN ODD NUMBER OF BAND EDGES!!!")
@@ -408,6 +431,6 @@ for i in range(2, len(sys.argv)):
 bandmap = map(int, bandmap)
 writeData(name, data)
 if smith == 0:
-    plotData(name, bandmap, data, sbs)
+    plotData(name, bandmap, data, sbs, zoomparams)
 else:
     plotSmith(name, bandmap, data)
